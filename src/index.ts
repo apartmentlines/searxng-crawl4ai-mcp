@@ -538,7 +538,7 @@ export class FirecrawlMCPServer {
             type: 'text',
             text: JSON.stringify({
               query: result.query,
-              total_results: result.number_of_results,
+              total_results: result.results?.length || result.number_of_results || 0,
               results: result.results.map(r => ({
                 title: r.title,
                 url: r.url,
@@ -606,7 +606,7 @@ export class FirecrawlMCPServer {
             type: 'text',
             text: JSON.stringify({
               query,
-              search_results: searchResults.number_of_results,
+              search_results: searchResults.results?.length || searchResults.number_of_results || 0,
               scraped_count: scrapeResults.results.filter(r => r.success).length,
               results: scrapeResults.results.map((scrapeResult, index) => ({
                 search_info: {
