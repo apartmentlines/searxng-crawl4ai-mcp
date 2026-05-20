@@ -47,56 +47,57 @@ outgoing:
   enable_http2: true         # <-- NIEUW: performance
   retries: 1                 # <-- NIEUW: één retry bij failure
 
-# Engines: prioriteer engines die minder snel blokkeren
 engines:
-  # Web search — minder agressieve engines bovenaan
-  - name: duckduckgo
-    engine: duckduckgo
-    shortcut: ddg
-    timeout: 6.0
-  
-  - name: brave
-    engine: brave
-    shortcut: br
-    timeout: 6.0
-    
-  - name: startpage
-    engine: startpage
-    shortcut: sp
-    timeout: 8.0
-  
-  - name: qwant
-    engine: qwant
-    shortcut: qw
-    categories: general
-    timeout: 6.0
-  
-  - name: mojeek
-    engine: mojeek
-    shortcut: mjk
-    timeout: 6.0
-    
-  # Google: behouden maar met lagere weight (wordt minder vaak gebruikt)
+  # More reliable general web engines for agent/API use
   - name: google
     engine: google
     shortcut: go
     use_mobile_ui: false
     timeout: 8.0
-    weight: 0.5
-  
-  # Bing: zelfde verhaal
+    weight: 1.0
+
   - name: bing
     engine: bing
     shortcut: bi
     timeout: 8.0
-    weight: 0.5
+    weight: 1.0
 
-  # Tech-specific engines (geen rate limit issues hier)
+  - name: qwant
+    engine: qwant
+    shortcut: qw
+    categories: general
+    timeout: 6.0
+
+  - name: mojeek
+    engine: mojeek
+    shortcut: mjk
+    timeout: 6.0
+
+  # Fragile engines: disable by default for automated agent traffic
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+    timeout: 6.0
+    disabled: true
+
+  - name: brave
+    engine: brave
+    shortcut: br
+    timeout: 6.0
+    disabled: true
+
+  - name: startpage
+    engine: startpage
+    shortcut: sp
+    timeout: 8.0
+    disabled: true
+
+  # Tech-specific engines
   - name: github
     engine: github
     shortcut: gh
     timeout: 8.0
-    
+
   - name: stackoverflow
     engine: stackoverflow
     shortcut: so
