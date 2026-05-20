@@ -12,7 +12,7 @@ import { logger } from './logger.js';
 import { SearXNGClient } from './searxng-client.js';
 import { Crawl4AIClient } from './crawl4ai-client.js';
 
-config();
+config({ quiet: true });
 
 export class FirecrawlMCPServer {
   private server: Server;
@@ -20,6 +20,7 @@ export class FirecrawlMCPServer {
   private searxng: SearXNGClient;
   private crawl4ai: Crawl4AIClient;
   private proxyAgent: any;
+  private firecrawlEnabled: boolean;
 
   constructor() {
     this.server = new Server(
@@ -33,6 +34,8 @@ export class FirecrawlMCPServer {
         },
       }
     );
+
+    this.firecrawlEnabled = process.env.ENABLE_FIRECRAWL !== 'false';
 
     // Initialize proxy agent
     this.proxyAgent = createProxyAgent(process.env.PROXY_URL);
@@ -54,9 +57,17 @@ export class FirecrawlMCPServer {
   }
 
   private setupToolHandlers() {
+    const firecrawlToolNames = new Set([
+      'scrape_url',
+      'batch_scrape',
+      'crawl_website',
+      'map_website',
+      'extract_structured_data',
+      'get_crawl_status',
+    ]);
+
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-      return {
-        tools: [
+      const tools = [
           {
             name: 'scrape_url',
             description: 'Scrape content from a single URL using proxy rotation',
@@ -337,7 +348,12 @@ export class FirecrawlMCPServer {
               required: ['url'],
             },
           }
-        ] as Tool[],
+        ] as Tool[];
+
+      return {
+        tools: this.firecrawlEnabled
+          ? tools
+          : tools.filter((tool) => !firecrawlToolNames.has(tool.name)),
       };
     });
 
@@ -345,6 +361,10 @@ export class FirecrawlMCPServer {
       const { name, arguments: args } = request.params;
 
       try {
+        if (!this.firecrawlEnabled && firecrawlToolNames.has(name)) {
+          throw new Error(`Firecrawl tool disabled by ENABLE_FIRECRAWL=false: ${name}`);
+        }
+
         switch (name) {
           case 'scrape_url':
             return await this.handleScrapeUrl(args);
