@@ -1,4 +1,4 @@
-import axios, { type AxiosResponse } from 'axios';
+import axios, { AxiosError, type AxiosResponse } from 'axios';
 import { logger } from './logger.js';
 
 export interface ScrapeOptions {
@@ -81,6 +81,9 @@ export class Crawl4AIClient {
       
     } catch (error) {
       logger.error(`Crawl4AI scrape error for ${url}:`, error);
+      if (error instanceof AxiosError) {
+        throw new Error(this.formatAxiosError(error));
+      }
       throw error;
     }
   }
@@ -113,6 +116,9 @@ export class Crawl4AIClient {
       
     } catch (error) {
       logger.error('Crawl4AI batch scrape error:', error);
+      if (error instanceof AxiosError) {
+        throw new Error(this.formatAxiosError(error));
+      }
       throw error;
     }
   }
@@ -147,6 +153,9 @@ export class Crawl4AIClient {
       
     } catch (error) {
       logger.error(`Crawl4AI extract error for ${url}:`, error);
+      if (error instanceof AxiosError) {
+        throw new Error(this.formatAxiosError(error));
+      }
       throw error;
     }
   }
@@ -160,5 +169,38 @@ export class Crawl4AIClient {
     } catch (error) {
       return false;
     }
+  }
+
+  private formatAxiosError(error: AxiosError): string {
+    const status = error.response?.status;
+    const data = error.response?.data;
+    const detail = this.extractErrorDetail(data);
+
+    if (status && detail) {
+      return `Request failed with status code ${status}: ${detail}`;
+    }
+    if (status) {
+      return `Request failed with status code ${status}`;
+    }
+    return error.message;
+  }
+
+  private extractErrorDetail(data: unknown): string | undefined {
+    if (!data) {
+      return undefined;
+    }
+    if (typeof data === 'string') {
+      return data;
+    }
+    if (typeof data === 'object' && 'detail' in data) {
+      const detail = (data as { detail?: unknown }).detail;
+      if (typeof detail === 'string') {
+        return detail;
+      }
+      if (detail) {
+        return JSON.stringify(detail);
+      }
+    }
+    return JSON.stringify(data);
   }
 }
