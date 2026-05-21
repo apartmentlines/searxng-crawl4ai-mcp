@@ -14,6 +14,8 @@ import { Crawl4AIClient } from './crawl4ai-client.js';
 
 config({ quiet: true });
 
+const MAX_SEARCH_PAGE = 3;
+
 export class FirecrawlMCPServer {
   private server: Server;
   private firecrawl: FirecrawlApp;
@@ -268,9 +270,9 @@ export class FirecrawlMCPServer {
                       description: 'Search language (en, es, fr, etc.)',
                       default: 'en'
                     },
-                    limit: {
+                    pageno: {
                       type: 'number',
-                      description: 'Number of results page (pageno)',
+                      description: 'Single search results page to request from SearXNG',
                       default: 1
                     }
                   }
@@ -540,15 +542,16 @@ export class FirecrawlMCPServer {
 
   private async handleSearchWeb(args: any) {
     const { query, options = {} } = args;
+    const pageno = this.clampIntegerOption(options.pageno, 1, 1, MAX_SEARCH_PAGE);
     
     logger.info(`Searching web with SearXNG: ${query}`);
     
     try {
-      const result = await this.searxng.search(query, {
+      const result = await this.searxng.searchWithEngineFallback(query, {
         engines: options.engines,
         categories: options.categories,
         language: options.language || 'en',
-        pageno: options.limit || 1,
+        pageno,
         format: 'json'
       });
       
@@ -559,6 +562,9 @@ export class FirecrawlMCPServer {
             text: JSON.stringify({
               query: result.query,
               total_results: result.results?.length || result.number_of_results || 0,
+              pageno,
+              engine_used: result.engine_used,
+              failed_engines: result.failed_engines,
               results: result.results.map(r => ({
                 title: r.title,
                 url: r.url,
@@ -579,6 +585,16 @@ export class FirecrawlMCPServer {
     }
   }
 
+  private clampIntegerOption(value: unknown, defaultValue: number, min: number, max: number): number {
+    const parsed = typeof value === 'number' ? value : Number(value);
+
+    if (!Number.isFinite(parsed)) {
+      return defaultValue;
+    }
+
+    return Math.min(Math.max(Math.trunc(parsed), min), max);
+  }
+
   private async handleSearchAndScrape(args: any) {
     const { query, options = {} } = args;
     
@@ -586,9 +602,10 @@ export class FirecrawlMCPServer {
     
     try {
       // First, search with SearXNG
-      const searchResults = await this.searxng.search(query, {
+      const searchResults = await this.searxng.searchWithEngineFallback(query, {
         engines: options.engines,
         language: 'en',
+        pageno: 1,
         format: 'json'
       });
       
@@ -601,6 +618,7 @@ export class FirecrawlMCPServer {
                 query,
                 search_results: 0,
                 scraped_results: [],
+                failed_engines: searchResults.failed_engines,
                 message: 'No search results found'
               }, null, 2),
             },
@@ -627,6 +645,8 @@ export class FirecrawlMCPServer {
             text: JSON.stringify({
               query,
               search_results: searchResults.results?.length || searchResults.number_of_results || 0,
+              engine_used: searchResults.engine_used,
+              failed_engines: searchResults.failed_engines,
               scraped_count: scrapeResults.results.filter(r => r.success).length,
               results: scrapeResults.results.map((scrapeResult, index) => ({
                 search_info: {

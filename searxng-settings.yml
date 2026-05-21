@@ -1,5 +1,14 @@
 # SearXNG Configuration for MCP Server
-use_default_settings: true
+use_default_settings:
+  engines:
+    keep_only:
+      - google
+      - bing
+      # - qwant
+      # - mojeek
+      - duckduckgo
+      # - brave
+      # - startpage
 
 general:
   debug: false
@@ -25,7 +34,7 @@ server:
   image_proxy: true
   http_protocol_version: "1.1"
   method: "POST"
-  limiter: false              # <-- NIEUW: bot detection + rate limiting
+  limiter: false
 
 ui:
   static_use_hash: false
@@ -40,68 +49,60 @@ ui:
 
 # Outgoing requests
 outgoing:
-  request_timeout: 6.0       # <-- Verlaagd: faster fail
+  request_timeout: 6.0
   max_request_timeout: 15.0
-  pool_connections: 100
-  pool_maxsize: 20
-  enable_http2: true         # <-- NIEUW: performance
-  retries: 1                 # <-- NIEUW: één retry bij failure
+  pool_connections: 20
+  pool_maxsize: 10
+  enable_http2: true
+  retries: 0
 
 engines:
-  # More reliable general web engines for agent/API use
+  # Preferred general web engines for private use
   - name: google
     engine: google
     shortcut: go
     use_mobile_ui: false
     timeout: 8.0
     weight: 1.0
+    disabled: false
 
   - name: bing
     engine: bing
     shortcut: bi
     timeout: 8.0
     weight: 1.0
+    disabled: false
 
-  - name: qwant
-    engine: qwant
-    shortcut: qw
-    categories: general
-    timeout: 6.0
+  # - name: qwant
+  #   engine: qwant
+  #   shortcut: qw
+  #   categories: general
+  #   timeout: 6.0
+  #   disabled: true
+  #
+  # - name: mojeek
+  #   engine: mojeek
+  #   shortcut: mjk
+  #   timeout: 6.0
+  #   disabled: true
 
-  - name: mojeek
-    engine: mojeek
-    shortcut: mjk
-    timeout: 6.0
-
-  # Fragile engines: disable by default for automated agent traffic
   - name: duckduckgo
     engine: duckduckgo
     shortcut: ddg
     timeout: 6.0
-    disabled: true
+    disabled: false
 
-  - name: brave
-    engine: brave
-    shortcut: br
-    timeout: 6.0
-    disabled: true
-
-  - name: startpage
-    engine: startpage
-    shortcut: sp
-    timeout: 8.0
-    disabled: true
-
-  # Tech-specific engines
-  - name: github
-    engine: github
-    shortcut: gh
-    timeout: 8.0
-
-  - name: stackoverflow
-    engine: stackoverflow
-    shortcut: so
-    timeout: 10.0
+  # - name: brave
+  #   engine: brave
+  #   shortcut: br
+  #   timeout: 6.0
+  #   disabled: true
+  #
+  # - name: startpage
+  #   engine: startpage
+  #   shortcut: sp
+  #   timeout: 8.0
+  #   disabled: true
 
 redis:
   url: redis://redis:6379/0

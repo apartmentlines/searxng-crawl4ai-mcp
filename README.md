@@ -121,10 +121,12 @@ Create `.claude/settings.json`:
 ```json
 {
   "query": "latest AI developments 2025",
-  "maxResults": 10
+  "options": {
+    "pageno": 1
+  }
 }
 ```
-**Returns:** 30+ search results in <1 second from multiple engines
+**Returns:** one SearXNG result page from the first healthy configured engine
 
 ### 2. `crawl4ai_scrape` - Advanced Web Scraping
 ```json
@@ -139,7 +141,9 @@ Create `.claude/settings.json`:
 ```json
 {
   "query": "Bitcoin technical analysis September 2025",
-  "maxResults": 2
+  "options": {
+    "max_results": 2
+  }
 }
 ```
 **Returns:** Search results + scraped content from top URLs (complete market intelligence)

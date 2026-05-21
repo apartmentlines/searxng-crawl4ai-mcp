@@ -15,7 +15,10 @@ Fast web search using SearXNG metasearch engine that aggregates 70+ search engin
 ```json
 {
   "query": "string (required) - Your search query",
-  "maxResults": "number (optional) - Max results to return (default: 10)"
+  "options": {
+    "engines": "string (optional) - Comma-separated engine allowlist",
+    "pageno": "number (optional) - Single SearXNG result page to request (default: 1)"
+  }
 }
 ```
 
@@ -23,13 +26,15 @@ Fast web search using SearXNG metasearch engine that aggregates 70+ search engin
 ```json
 {
   "query": "Bitcoin price analysis September 2025",
-  "maxResults": 5
+  "options": {
+    "pageno": 1
+  }
 }
 ```
 
 ### What You Get Back
 - **Search Results**: Array of results with titles, URLs, snippets
-- **Source Diversity**: Results from Google, Bing, DuckDuckGo, Wikipedia, etc.
+- **Engine Fallback**: Rotates through configured SearXNG engines one at a time
 - **Metadata**: Engine sources, relevance scores, publish dates
 - **Performance**: Sub-second response time
 
@@ -135,7 +140,9 @@ Combined workflow that searches for information, then automatically scrapes cont
 ```json
 {
   "query": "string (required) - Search query",
-  "maxResults": "number (optional) - Number of top results to scrape (default: 3)"
+  "options": {
+    "max_results": "number (optional) - Number of top results to scrape (default: 3)"
+  }
 }
 ```
 
@@ -143,7 +150,9 @@ Combined workflow that searches for information, then automatically scrapes cont
 ```json
 {
   "query": "Federal Reserve rate decision impact market analysis",
-  "maxResults": 2
+  "options": {
+    "max_results": 2
+  }
 }
 ```
 
@@ -212,7 +221,7 @@ Combined workflow that searches for information, then automatically scrapes cont
 
 ### Optimize search_web:
 - Use specific queries for better results
-- Limit maxResults to avoid overwhelming data
+- Use `pageno: 1` when you only want the first result page
 - Use for discovery, then target specific URLs
 
 ### Optimize crawl4ai_scrape:
@@ -221,7 +230,7 @@ Combined workflow that searches for information, then automatically scrapes cont
 - Consider timeout settings for slow sites
 
 ### Optimize search_and_scrape:
-- Keep maxResults low (1-3) to avoid token limits
+- Keep `max_results` low (1-3) to avoid token limits
 - Use specific, targeted queries
 - Perfect for research that needs depth over breadth
 

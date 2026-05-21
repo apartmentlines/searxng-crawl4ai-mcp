@@ -62,8 +62,8 @@ Once installed, you'll have these 3 tools in Claude Code:
 ### 1. `search_web` - Lightning Fast Search
 ```
 Tool: search_web
-Input: {"query": "current Bitcoin price", "maxResults": 10}
-Output: 30+ search results in <1 second
+Input: {"query": "current Bitcoin price", "options": {"pageno": 1}}
+Output: One SearXNG result page from the first healthy configured engine
 ```
 
 ### 2. `crawl4ai_scrape` - Advanced Web Scraping
@@ -76,7 +76,7 @@ Output: Full page content, word count, metadata
 ### 3. `search_and_scrape` - Combined Power
 ```
 Tool: search_and_scrape  
-Input: {"query": "Python tutorials", "maxResults": 3}
+Input: {"query": "Python tutorials", "options": {"max_results": 3}}
 Output: Search results + scraped content from top URLs
 ```
 
