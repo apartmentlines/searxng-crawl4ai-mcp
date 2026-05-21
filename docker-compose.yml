@@ -3,7 +3,10 @@
 services:
   # SearXNG - Open source metasearch engine
   searxng:
-    image: searxng/searxng:latest
+    build:
+      context: ./docker/searxng
+      dockerfile: Dockerfile
+    image: searxng-crawl4ai/searxng:duckduckgo-parser-patch
     container_name: searxng
     ports:
       - "8081:8080"
