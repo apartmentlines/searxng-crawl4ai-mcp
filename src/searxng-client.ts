@@ -34,6 +34,7 @@ interface SearXNGConfigResponse {
 interface EngineAttemptFailure {
   engine: string;
   reason: string;
+  retry_after_ms?: number;
 }
 
 export interface SearXNGFallbackSearchResponse extends SearXNGSearchResponse {
@@ -55,15 +56,22 @@ export class SearXNGClient {
   private baseUrl: string;
   private lastSearchAt = 0;
   private minSearchIntervalMs: number;
+  private engineCooldownMs: number;
+  private engineCooldownUntil = new Map<string, number>();
   private searchQueue: Promise<void> = Promise.resolve();
   private engineCursor = 0;
 
   constructor(baseUrl: string = 'http://localhost:8080') {
     this.baseUrl = baseUrl.replace(/\/$/, '');
     this.minSearchIntervalMs = Number.parseInt(process.env.SEARXNG_MIN_SEARCH_INTERVAL_MS || '1000', 10);
+    this.engineCooldownMs = Number.parseInt(process.env.SEARXNG_ENGINE_COOLDOWN_MS || '1800000', 10);
 
     if (!Number.isFinite(this.minSearchIntervalMs) || this.minSearchIntervalMs < 0) {
       this.minSearchIntervalMs = 1000;
+    }
+
+    if (!Number.isFinite(this.engineCooldownMs) || this.engineCooldownMs < 0) {
+      this.engineCooldownMs = 1800000;
     }
   }
 
@@ -85,6 +93,14 @@ export class SearXNGClient {
     const failedEngines: EngineAttemptFailure[] = [];
 
     for (const engine of orderedEngines) {
+      const cooldownRemainingMs = this.getEngineCooldownRemainingMs(engine);
+      if (cooldownRemainingMs > 0) {
+        const reason = `Cooling down after CAPTCHA/rate-limit failure`;
+        failedEngines.push({ engine, reason, retry_after_ms: cooldownRemainingMs });
+        logger.warn(`SearXNG engine ${engine} skipped for "${query}": ${reason} (${cooldownRemainingMs}ms remaining)`);
+        continue;
+      }
+
       try {
         const result = await this.search(query, {
           ...options,
@@ -95,9 +111,11 @@ export class SearXNGClient {
         if (failureReason) {
           failedEngines.push({ engine, reason: failureReason });
           logger.warn(`SearXNG engine ${engine} failed for "${query}": ${failureReason}`);
+          this.cooldownEngineIfNeeded(engine, failureReason);
           continue;
         }
 
+        this.clearEngineCooldown(engine);
         logger.info(`SearXNG engine ${engine} succeeded for "${query}"`);
         return {
           ...result,
@@ -108,6 +126,7 @@ export class SearXNGClient {
         const reason = error instanceof Error ? error.message : 'Unknown error';
         failedEngines.push({ engine, reason });
         logger.warn(`SearXNG engine ${engine} failed for "${query}": ${reason}`);
+        this.cooldownEngineIfNeeded(engine, reason);
       }
     }
 
@@ -216,6 +235,51 @@ export class SearXNGClient {
     }
 
     return null;
+  }
+
+  private cooldownEngineIfNeeded(engine: string, reason: string): void {
+    if (this.engineCooldownMs === 0 || !this.isCooldownFailureReason(reason)) {
+      return;
+    }
+
+    const cooldownUntil = Date.now() + this.engineCooldownMs;
+    this.engineCooldownUntil.set(engine, cooldownUntil);
+    logger.warn(`SearXNG engine ${engine} cooling down for ${this.engineCooldownMs}ms after: ${reason}`);
+  }
+
+  private clearEngineCooldown(engine: string): void {
+    this.engineCooldownUntil.delete(engine);
+  }
+
+  private getEngineCooldownRemainingMs(engine: string): number {
+    const cooldownUntil = this.engineCooldownUntil.get(engine);
+
+    if (!cooldownUntil) {
+      return 0;
+    }
+
+    const remainingMs = cooldownUntil - Date.now();
+
+    if (remainingMs <= 0) {
+      this.engineCooldownUntil.delete(engine);
+      return 0;
+    }
+
+    return remainingMs;
+  }
+
+  private isCooldownFailureReason(reason: string): boolean {
+    const normalizedReason = reason.toLowerCase();
+
+    return (
+      normalizedReason.includes('captcha') ||
+      normalizedReason.includes('429') ||
+      normalizedReason.includes('too many') ||
+      normalizedReason.includes('access denied') ||
+      normalizedReason.includes('rate limit') ||
+      normalizedReason.includes('ratelimit') ||
+      normalizedReason.includes('suspended')
+    );
   }
 
   private async runThrottledSearch<T>(operation: () => Promise<T>): Promise<T> {

@@ -35,8 +35,9 @@ Fast web search using SearXNG metasearch engine that aggregates 70+ search engin
 ### What You Get Back
 - **Search Results**: Array of results with titles, URLs, snippets
 - **Engine Fallback**: Rotates through configured SearXNG engines one at a time
+- **Engine Cooldown**: Skips engines that recently returned CAPTCHA/429/access-denied until `SEARXNG_ENGINE_COOLDOWN_MS` expires
 - **Metadata**: Engine sources, relevance scores, publish dates
-- **Performance**: Sub-second response time
+- **Performance**: Backend requests are throttled by `SEARXNG_MIN_SEARCH_INTERVAL_MS`
 
 ### ✅ **Pros**
 - ⚡ **Ultra-fast**: <1 second response time
