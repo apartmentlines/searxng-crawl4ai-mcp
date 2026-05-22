@@ -38,6 +38,7 @@ export interface Crawl4AIResponse {
     };
   };
   error?: string;
+  status?: number;
 }
 
 export interface BatchScrapeResponse {
@@ -77,7 +78,8 @@ export class Crawl4AIClient {
       const result = response.data;
       
       if (!result.success) {
-        throw new Error(`Scraping failed: ${result.error}`);
+        logger.warn(`Crawl4AI scrape failed for ${url}: ${result.error || 'Unknown error'}`);
+        return result;
       }
       
       logger.info(`Successfully scraped ${url} (${result.data?.metadata?.word_count || 0} words)`);
@@ -86,7 +88,18 @@ export class Crawl4AIClient {
     } catch (error) {
       logger.error(`Crawl4AI scrape error for ${url}:`, error);
       if (error instanceof AxiosError) {
-        throw new Error(this.formatAxiosError(error));
+        if (this.isBackendUnavailableError(error)) {
+          throw new Error(this.formatAxiosError(error));
+        }
+        const scrapeFailure: Crawl4AIResponse = {
+          success: false,
+          url,
+          error: this.formatAxiosError(error),
+        };
+        if (error.response?.status) {
+          scrapeFailure.status = error.response.status;
+        }
+        return scrapeFailure;
       }
       throw error;
     }
@@ -188,6 +201,19 @@ export class Crawl4AIClient {
       return `Request failed with status code ${status}`;
     }
     return error.message;
+  }
+
+  private isBackendUnavailableError(error: AxiosError): boolean {
+    if (error.response) {
+      return false;
+    }
+
+    return [
+      'ECONNREFUSED',
+      'ENOTFOUND',
+      'EAI_AGAIN',
+      'ECONNRESET',
+    ].includes(error.code || '');
   }
 
   private extractErrorDetail(data: unknown): string | undefined {

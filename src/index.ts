@@ -693,6 +693,38 @@ export class FirecrawlMCPServer {
   private async handleCrawl4AIScrape(args: any) {
     const { url, options = {} } = args;
     
+    if (typeof url !== 'string' || url.trim() === '') {
+      throw new Error('crawl4ai_scrape requires a non-empty url string');
+    }
+    try {
+      new URL(url);
+    } catch {
+      throw new Error(`crawl4ai_scrape requires a valid URL: ${url}`);
+    }
+    if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+      throw new Error('crawl4ai_scrape options must be an object');
+    }
+    if (options.formats !== undefined && (
+      !Array.isArray(options.formats) ||
+      !options.formats.every((format: unknown) => typeof format === 'string' && format.trim() !== '')
+    )) {
+      throw new Error('crawl4ai_scrape options.formats must be an array of non-empty strings');
+    }
+    if (options.wait_for !== undefined && (
+      typeof options.wait_for !== 'number' ||
+      !Number.isFinite(options.wait_for) ||
+      options.wait_for < 0
+    )) {
+      throw new Error('crawl4ai_scrape options.wait_for must be a non-negative number');
+    }
+    if (options.timeout !== undefined && (
+      typeof options.timeout !== 'number' ||
+      !Number.isFinite(options.timeout) ||
+      options.timeout <= 0
+    )) {
+      throw new Error('crawl4ai_scrape options.timeout must be a positive number');
+    }
+
     logger.info(`Scraping with Crawl4AI: ${url}`);
     
     try {
