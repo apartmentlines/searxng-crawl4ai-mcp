@@ -563,7 +563,7 @@ export class FirecrawlMCPServer {
   }
 
   private async handleSearchWeb(args: any) {
-    const { query, options = {} } = args;
+    const { query, options } = this.validateSearchArgs(args, 'search_web');
     const pageno = this.clampIntegerOption(options.pageno, 1, 1, MAX_SEARCH_PAGE);
     
     logger.info(`Searching web with SearXNG: ${query}`);
@@ -582,6 +582,7 @@ export class FirecrawlMCPServer {
           {
             type: 'text',
             text: JSON.stringify({
+              success: result.success,
               query: result.query,
               total_results: result.results?.length || result.number_of_results || 0,
               pageno,
@@ -596,7 +597,8 @@ export class FirecrawlMCPServer {
               suggestions: result.suggestions,
               engine_info: {
                 unresponsive: result.unresponsive_engines
-              }
+              },
+              ...(result.message && { message: result.message })
             }, null, 2),
           },
         ],
@@ -618,7 +620,7 @@ export class FirecrawlMCPServer {
   }
 
   private async handleSearchAndScrape(args: any) {
-    const { query, options = {} } = args;
+    const { query, options } = this.validateSearchArgs(args, 'search_and_scrape');
     
     logger.info(`Search and scrape workflow: ${query}`);
     
@@ -631,17 +633,18 @@ export class FirecrawlMCPServer {
         format: 'json'
       });
       
-      if (!searchResults.results || searchResults.results.length === 0) {
+      if (!searchResults.success || !searchResults.results || searchResults.results.length === 0) {
         return {
           content: [
             {
               type: 'text',
               text: JSON.stringify({
+                success: false,
                 query,
                 search_results: 0,
                 scraped_results: [],
                 failed_engines: searchResults.failed_engines,
-                message: 'No search results found'
+                message: searchResults.message || 'No search results found'
               }, null, 2),
             },
           ],
@@ -666,6 +669,7 @@ export class FirecrawlMCPServer {
           {
             type: 'text',
             text: JSON.stringify({
+              success: true,
               query,
               search_results: searchResults.results?.length || searchResults.number_of_results || 0,
               engine_used: searchResults.engine_used,
@@ -688,6 +692,23 @@ export class FirecrawlMCPServer {
       logger.error('Search and scrape workflow failed:', error);
       throw new Error(`Search and scrape failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  private validateSearchArgs(args: any, toolName: string): { query: string; options: Record<string, any> } {
+    const { query, options = {} } = args || {};
+
+    if (typeof query !== 'string' || query.trim() === '') {
+      throw new Error(`${toolName} requires a non-empty query string`);
+    }
+
+    if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+      throw new Error(`${toolName} options must be an object`);
+    }
+
+    return {
+      query,
+      options,
+    };
   }
 
   private async handleCrawl4AIScrape(args: any) {

@@ -1,4 +1,4 @@
-import axios, { type AxiosResponse } from 'axios';
+import axios, { type AxiosError, type AxiosResponse } from 'axios';
 import { logger } from './logger.js';
 
 export interface SearchResult {
@@ -38,8 +38,10 @@ interface EngineAttemptFailure {
 }
 
 export interface SearXNGFallbackSearchResponse extends SearXNGSearchResponse {
-  engine_used: string;
+  success: boolean;
+  engine_used: string | null;
   failed_engines: EngineAttemptFailure[];
+  message?: string;
 }
 
 export interface SearXNGSearchOptions {
@@ -119,10 +121,15 @@ export class SearXNGClient {
         logger.info(`SearXNG engine ${engine} succeeded for "${query}"`);
         return {
           ...result,
+          success: true,
           engine_used: engine,
           failed_engines: failedEngines,
         };
       } catch (error) {
+        if (this.isBackendUnavailableError(error)) {
+          throw error;
+        }
+
         const reason = error instanceof Error ? error.message : 'Unknown error';
         failedEngines.push({ engine, reason });
         logger.warn(`SearXNG engine ${engine} failed for "${query}": ${reason}`);
@@ -130,7 +137,7 @@ export class SearXNGClient {
       }
     }
 
-    throw new Error(`All SearXNG engines failed: ${failedEngines.map(({ engine, reason }) => `${engine}: ${reason}`).join('; ')}`);
+    return this.createFailedSearchResponse(query, failedEngines);
   }
 
   async getActiveEngines(): Promise<string[]> {
@@ -235,6 +242,40 @@ export class SearXNGClient {
     }
 
     return null;
+  }
+
+  private createFailedSearchResponse(
+    query: string,
+    failedEngines: EngineAttemptFailure[]
+  ): SearXNGFallbackSearchResponse {
+    return {
+      success: false,
+      query,
+      number_of_results: 0,
+      results: [],
+      answers: [],
+      corrections: [],
+      infoboxes: [],
+      suggestions: [],
+      unresponsive_engines: [],
+      engine_used: null,
+      failed_engines: failedEngines,
+      message: 'No search results found',
+    };
+  }
+
+  private isBackendUnavailableError(error: unknown): boolean {
+    if (!axios.isAxiosError(error)) {
+      return false;
+    }
+
+    const axiosError = error as AxiosError;
+
+    if (axiosError.response) {
+      return false;
+    }
+
+    return ['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ECONNRESET'].includes(axiosError.code || '');
   }
 
   private cooldownEngineIfNeeded(engine: string, reason: string): void {
