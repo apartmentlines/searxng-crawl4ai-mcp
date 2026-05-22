@@ -228,11 +228,13 @@ Combined workflow that searches for information, then automatically scrapes cont
 ### Optimize crawl4ai_scrape:
 - Test with simple pages first
 - Use markdown format for best readability
-- Consider timeout settings for slow sites
+- Default single-page timeout is `CRAWL4AI_SCRAPE_TIMEOUT_MS` (`10000`ms)
+- Override timeout per request for slow sites
 
 ### Optimize search_and_scrape:
 - Keep `max_results` low (1-3) to avoid token limits
 - Use specific, targeted queries
+- Default batch scrape timeout is `CRAWL4AI_BATCH_TIMEOUT_MS` (`45000`ms)
 - Perfect for research that needs depth over breadth
 
 ---

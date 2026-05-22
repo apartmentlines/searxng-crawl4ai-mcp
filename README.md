@@ -186,6 +186,8 @@ Use search_and_scrape to find "Bitcoin RSI technical analysis September 2025"
 | `SEARXNG_MIN_SEARCH_INTERVAL_MS` | Minimum interval between SearXNG backend requests | 1000 |
 | `SEARXNG_ENGINE_COOLDOWN_MS` | Per-engine cooldown after CAPTCHA/429/access-denied responses; set `0` to disable | 1800000 |
 | `CRAWL4AI_URL` | Crawl4AI service URL | http://localhost:8001 |
+| `CRAWL4AI_SCRAPE_TIMEOUT_MS` | Default timeout for a single Crawl4AI scrape | 10000 |
+| `CRAWL4AI_BATCH_TIMEOUT_MS` | Default timeout for Crawl4AI batch/search-and-scrape requests | 45000 |
 | `MCP_MODE` | Disable console logging for MCP | false |
 
 ### Docker Services
@@ -232,7 +234,7 @@ SearXNG automatically queries:
   "url": "https://example.com",
   "formats": ["markdown", "html", "links"],
   "wait_for": 2000,
-  "timeout": 30000
+  "timeout": 10000
 }
 ```
 

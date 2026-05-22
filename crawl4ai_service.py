@@ -19,7 +19,39 @@ from pydantic import BaseModel, Field
 
 PDF_MAGIC = b"%PDF-"
 SNIFF_BYTES = 4096
-DEFAULT_TIMEOUT_MS = 30000
+FALLBACK_SCRAPE_TIMEOUT_MS = 10000
+FALLBACK_BATCH_TIMEOUT_MS = 45000
+
+
+def parse_positive_integer_env(name: str, fallback: int) -> int:
+    """:param name: Environment variable name.
+    :type name: str
+    :param fallback: Value to use when the variable is unset or invalid.
+    :type fallback: int
+    :return: Parsed positive integer value.
+    :rtype: int
+    """
+
+    raw_value = os.getenv(name)
+    if not raw_value:
+        return fallback
+
+    try:
+        parsed_value = int(raw_value)
+    except ValueError:
+        return fallback
+
+    return parsed_value if parsed_value > 0 else fallback
+
+
+DEFAULT_TIMEOUT_MS = parse_positive_integer_env(
+    "CRAWL4AI_SCRAPE_TIMEOUT_MS",
+    FALLBACK_SCRAPE_TIMEOUT_MS,
+)
+DEFAULT_BATCH_TIMEOUT_MS = parse_positive_integer_env(
+    "CRAWL4AI_BATCH_TIMEOUT_MS",
+    FALLBACK_BATCH_TIMEOUT_MS,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -39,6 +71,7 @@ class BatchScrapeRequest(BaseModel):
     urls: list[str]
     formats: list[str] | None = Field(default_factory=lambda: ["markdown"])
     concurrency: int | None = 3
+    timeout: int | None = DEFAULT_BATCH_TIMEOUT_MS
 
 
 class ExtractRequest(BaseModel):
@@ -349,9 +382,17 @@ async def scrape_url(request: ScrapeRequest) -> dict[str, Any]:
         )
 
         if inspection.is_pdf:
-            result = await service.scrape_pdf(inspection.final_url)
+            scrape_task = service.scrape_pdf(inspection.final_url)
         else:
-            result = await service.scrape_html(request, inspection.final_url)
+            scrape_task = service.scrape_html(request, inspection.final_url)
+
+        try:
+            result = await asyncio.wait_for(scrape_task, timeout=timeout_ms / 1000)
+        except TimeoutError as error:
+            raise HTTPException(
+                status_code=504,
+                detail=f"Scraping timed out after {timeout_ms}ms",
+            ) from error
 
         if not result.success:
             raise HTTPException(
@@ -376,7 +417,11 @@ async def batch_scrape_urls(request: BatchScrapeRequest) -> dict[str, Any]:
 
         async def scrape_single(url: str) -> dict[str, Any]:
             async with semaphore:
-                scrape_request = ScrapeRequest(url=url, formats=request.formats)
+                scrape_request = ScrapeRequest(
+                    url=url,
+                    formats=request.formats,
+                    timeout=request.timeout,
+                )
                 return await scrape_url(scrape_request)
 
         tasks = [scrape_single(url) for url in request.urls]

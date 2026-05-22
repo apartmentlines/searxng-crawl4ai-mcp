@@ -15,6 +15,18 @@ import { Crawl4AIClient } from './crawl4ai-client.js';
 config({ quiet: true });
 
 const MAX_SEARCH_PAGE = 3;
+const DEFAULT_CRAWL4AI_SCRAPE_TIMEOUT_MS = 10000;
+const DEFAULT_CRAWL4AI_BATCH_TIMEOUT_MS = 45000;
+
+function parsePositiveIntegerEnv(name: string, fallback: number): number {
+  const rawValue = process.env[name];
+  if (!rawValue) {
+    return fallback;
+  }
+
+  const parsedValue = Number.parseInt(rawValue, 10);
+  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : fallback;
+}
 
 export class FirecrawlMCPServer {
   private server: Server;
@@ -23,6 +35,8 @@ export class FirecrawlMCPServer {
   private crawl4ai: Crawl4AIClient;
   private proxyAgent: any;
   private firecrawlEnabled: boolean;
+  private crawl4aiScrapeTimeoutMs: number;
+  private crawl4aiBatchTimeoutMs: number;
 
   constructor() {
     this.server = new Server(
@@ -38,6 +52,14 @@ export class FirecrawlMCPServer {
     );
 
     this.firecrawlEnabled = process.env.ENABLE_FIRECRAWL !== 'false';
+    this.crawl4aiScrapeTimeoutMs = parsePositiveIntegerEnv(
+      'CRAWL4AI_SCRAPE_TIMEOUT_MS',
+      DEFAULT_CRAWL4AI_SCRAPE_TIMEOUT_MS
+    );
+    this.crawl4aiBatchTimeoutMs = parsePositiveIntegerEnv(
+      'CRAWL4AI_BATCH_TIMEOUT_MS',
+      DEFAULT_CRAWL4AI_BATCH_TIMEOUT_MS
+    );
 
     // Initialize proxy agent
     this.proxyAgent = createProxyAgent(process.env.PROXY_URL);
@@ -342,7 +364,7 @@ export class FirecrawlMCPServer {
                     timeout: {
                       type: 'number',
                       description: 'Timeout in milliseconds',
-                      default: 30000
+                      default: this.crawl4aiScrapeTimeoutMs
                     }
                   }
                 }
@@ -635,7 +657,8 @@ export class FirecrawlMCPServer {
       // Scrape the results
       const scrapeResults = await this.crawl4ai.batchScrape(topUrls, {
         formats: options.scrape_formats || ['markdown'],
-        concurrency: 2
+        concurrency: 2,
+        timeout: this.crawl4aiBatchTimeoutMs
       });
       
       return {
@@ -676,7 +699,7 @@ export class FirecrawlMCPServer {
       const result = await this.crawl4ai.scrape(url, {
         formats: options.formats || ['markdown'],
         wait_for: options.wait_for || 0,
-        timeout: options.timeout || 30000,
+        timeout: options.timeout || this.crawl4aiScrapeTimeoutMs,
         proxy_url: process.env.PROXY_URL
       });
       

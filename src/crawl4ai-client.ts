@@ -1,6 +1,9 @@
 import axios, { AxiosError, type AxiosResponse } from 'axios';
 import { logger } from './logger.js';
 
+const DEFAULT_SCRAPE_TIMEOUT_MS = 10000;
+const DEFAULT_BATCH_TIMEOUT_MS = 45000;
+
 export interface ScrapeOptions {
   formats?: string[];
   wait_for?: number;
@@ -11,6 +14,7 @@ export interface ScrapeOptions {
 export interface BatchScrapeOptions {
   formats?: string[];
   concurrency?: number;
+  timeout?: number;
 }
 
 export interface ExtractOptions {
@@ -59,14 +63,14 @@ export class Crawl4AIClient {
           url,
           formats: options.formats || ['markdown'],
           wait_for: options.wait_for || 0,
-          timeout: options.timeout || 30000,
+          timeout: options.timeout || DEFAULT_SCRAPE_TIMEOUT_MS,
           proxy_url: options.proxy_url
         },
         {
           headers: {
             'Content-Type': 'application/json',
           },
-          timeout: (options.timeout || 30000) + 5000
+          timeout: (options.timeout || DEFAULT_SCRAPE_TIMEOUT_MS) + 5000
         }
       );
 
@@ -97,13 +101,14 @@ export class Crawl4AIClient {
         {
           urls,
           formats: options.formats || ['markdown'],
-          concurrency: Math.min(options.concurrency || 3, 5)
+          concurrency: Math.min(options.concurrency || 3, 5),
+          timeout: options.timeout
         },
         {
           headers: {
             'Content-Type': 'application/json',
           },
-          timeout: 120000 // 2 minutes for batch operations
+          timeout: (options.timeout || DEFAULT_BATCH_TIMEOUT_MS) + 5000
         }
       );
 

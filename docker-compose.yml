@@ -59,6 +59,8 @@ services:
     environment:
       - PROXY_URL=${PROXY_URL}
       - CRAWL4AI_LOG_LEVEL=INFO
+      - CRAWL4AI_SCRAPE_TIMEOUT_MS=${CRAWL4AI_SCRAPE_TIMEOUT_MS:-10000}
+      - CRAWL4AI_BATCH_TIMEOUT_MS=${CRAWL4AI_BATCH_TIMEOUT_MS:-45000}
     networks:
       - search-net
     restart: unless-stopped
