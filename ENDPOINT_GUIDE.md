@@ -36,6 +36,7 @@ Fast web search using SearXNG metasearch engine that aggregates 70+ search engin
 - **Search Results**: Array of results with titles, URLs, snippets
 - **Engine Fallback**: Rotates through configured SearXNG engines one at a time
 - **Engine Cooldown**: Skips engines that recently returned CAPTCHA/429/access-denied until `SEARXNG_ENGINE_COOLDOWN_MS` expires
+- **Engine Override Control**: Set `SEARXNG_IGNORE_CLIENT_ENGINE_OVERRIDE=true` to ignore MCP client `options.engines` values and keep internal rotation in control
 - **Metadata**: Engine sources, relevance scores, publish dates
 - **Performance**: Backend requests are throttled by `SEARXNG_MIN_SEARCH_INTERVAL_MS`
 

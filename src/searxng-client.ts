@@ -258,11 +258,27 @@ export class SearXNGClient {
   }
 
   private async resolveCandidateEngines(engineOverride?: string): Promise<string[]> {
-    const engines = engineOverride
-      ? engineOverride.split(',').map((engine) => engine.trim()).filter(Boolean)
-      : await this.getActiveEngines();
+    const activeEngines = await this.getActiveEngines();
 
-    return [...new Set(engines)];
+    if (!engineOverride) {
+      return [...new Set(activeEngines)];
+    }
+
+    const requestedEngines = [...new Set(engineOverride.split(',').map((engine) => engine.trim()).filter(Boolean))];
+    const activeEngineNames = new Set(activeEngines);
+    const validEngines = requestedEngines.filter((engine) => activeEngineNames.has(engine));
+    const invalidEngines = requestedEngines.filter((engine) => !activeEngineNames.has(engine));
+
+    if (invalidEngines.length > 0) {
+      logger.warn(`Ignoring unavailable SearXNG engine override(s): ${invalidEngines.join(', ')}`);
+    }
+
+    if (validEngines.length > 0) {
+      return validEngines;
+    }
+
+    logger.warn(`No requested SearXNG engine override is currently enabled; using internal engine rotation`);
+    return [...new Set(activeEngines)];
   }
 
   private rotateEngines(engines: string[]): string[] {

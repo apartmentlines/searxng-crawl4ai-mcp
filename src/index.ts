@@ -65,6 +65,7 @@ export class FirecrawlMCPServer {
   private metrics: MetricsRecorder;
   private metricsService: MetricsService | null;
   private metricsPort: number;
+  private ignoreClientEngineOverride: boolean;
 
   constructor() {
     this.server = new Server(
@@ -83,6 +84,7 @@ export class FirecrawlMCPServer {
     this.metricsService = createMetricsService();
     this.metrics = this.metricsService ?? new NullMetricsRecorder();
     this.metricsPort = parsePositiveIntegerEnv('MCP_METRICS_PORT', DEFAULT_METRICS_PORT);
+    this.ignoreClientEngineOverride = parseBooleanEnv('SEARXNG_IGNORE_CLIENT_ENGINE_OVERRIDE', false);
     this.crawl4aiScrapeTimeoutMs = parsePositiveIntegerEnv(
       'CRAWL4AI_SCRAPE_TIMEOUT_MS',
       DEFAULT_CRAWL4AI_SCRAPE_TIMEOUT_MS
@@ -601,7 +603,7 @@ export class FirecrawlMCPServer {
     
     try {
       const result = await this.searxng.searchWithEngineFallback(query, {
-        engines: options.engines,
+        engines: this.getClientEngineOverride(options),
         categories: options.categories,
         language: options.language || 'en',
         pageno,
@@ -650,6 +652,21 @@ export class FirecrawlMCPServer {
     return Math.min(Math.max(Math.trunc(parsed), min), max);
   }
 
+  private getClientEngineOverride(options: Record<string, any>): string | undefined {
+    const engines = options.engines;
+
+    if (typeof engines !== 'string' || engines.trim() === '') {
+      return undefined;
+    }
+
+    if (this.ignoreClientEngineOverride) {
+      logger.info(`Ignoring client-provided SearXNG engine override: ${engines}`);
+      return undefined;
+    }
+
+    return engines;
+  }
+
   private async handleSearchAndScrape(args: any) {
     const { query, options } = this.validateSearchArgs(args, 'search_and_scrape');
     
@@ -658,7 +675,7 @@ export class FirecrawlMCPServer {
     try {
       // First, search with SearXNG
       const searchResults = await this.searxng.searchWithEngineFallback(query, {
-        engines: options.engines,
+        engines: this.getClientEngineOverride(options),
         language: 'en',
         pageno: 1,
         format: 'json'
