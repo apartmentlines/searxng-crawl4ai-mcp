@@ -57,7 +57,8 @@ export interface SearXNGSearchOptions {
 export class SearXNGClient {
   private baseUrl: string;
   private lastSearchAt = 0;
-  private minSearchIntervalMs: number;
+  private searchIntervalMinMs: number;
+  private searchIntervalMaxMs: number;
   private engineCooldownMs: number;
   private engineCooldownUntil = new Map<string, number>();
   private searchQueue: Promise<void> = Promise.resolve();
@@ -65,11 +66,13 @@ export class SearXNGClient {
 
   constructor(baseUrl: string = 'http://localhost:8080') {
     this.baseUrl = baseUrl.replace(/\/$/, '');
-    this.minSearchIntervalMs = Number.parseInt(process.env.SEARXNG_MIN_SEARCH_INTERVAL_MS || '2000', 10);
+    this.searchIntervalMinMs = this.parseNonNegativeIntegerEnv('SEARXNG_SEARCH_INTERVAL_MIN_MS', 3000);
+    this.searchIntervalMaxMs = this.parseNonNegativeIntegerEnv('SEARXNG_SEARCH_INTERVAL_MAX_MS', 5000);
     this.engineCooldownMs = Number.parseInt(process.env.SEARXNG_ENGINE_COOLDOWN_MS || '1800000', 10);
 
-    if (!Number.isFinite(this.minSearchIntervalMs) || this.minSearchIntervalMs < 0) {
-      this.minSearchIntervalMs = 2000;
+    if (this.searchIntervalMinMs > this.searchIntervalMaxMs) {
+      this.searchIntervalMinMs = 3000;
+      this.searchIntervalMaxMs = 5000;
     }
 
     if (!Number.isFinite(this.engineCooldownMs) || this.engineCooldownMs < 0) {
@@ -324,6 +327,22 @@ export class SearXNGClient {
     );
   }
 
+  private parseNonNegativeIntegerEnv(name: string, fallback: number): number {
+    const rawValue = process.env[name];
+
+    if (!rawValue) {
+      return fallback;
+    }
+
+    const parsedValue = Number.parseInt(rawValue, 10);
+    return Number.isFinite(parsedValue) && parsedValue >= 0 ? parsedValue : fallback;
+  }
+
+  private getSearchIntervalDelayMs(): number {
+    const range = this.searchIntervalMaxMs - this.searchIntervalMinMs;
+    return this.searchIntervalMinMs + Math.floor(Math.random() * (range + 1));
+  }
+
   private async runThrottledSearch<T>(operation: () => Promise<T>): Promise<T> {
     const previousSearch = this.searchQueue.catch(() => undefined);
     let releaseSearch!: () => void;
@@ -336,7 +355,7 @@ export class SearXNGClient {
 
     try {
       const elapsed = Date.now() - this.lastSearchAt;
-      const delay = this.minSearchIntervalMs - elapsed;
+      const delay = this.getSearchIntervalDelayMs() - elapsed;
 
       if (delay > 0) {
         await new Promise((resolve) => setTimeout(resolve, delay));

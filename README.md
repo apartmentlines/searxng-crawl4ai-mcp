@@ -183,7 +183,8 @@ Use search_and_scrape to find "Bitcoin RSI technical analysis September 2025"
 |----------|-------------|---------|
 | `PROXY_URL` | Your rotating IP proxy URL | None |
 | `SEARXNG_URL` | SearXNG service URL | http://localhost:8081 |
-| `SEARXNG_MIN_SEARCH_INTERVAL_MS` | Minimum interval between SearXNG backend requests | 2000 |
+| `SEARXNG_SEARCH_INTERVAL_MIN_MS` | Minimum randomized interval between SearXNG backend request turns | 3000 |
+| `SEARXNG_SEARCH_INTERVAL_MAX_MS` | Maximum randomized interval between SearXNG backend request turns | 5000 |
 | `SEARXNG_ENGINE_COOLDOWN_MS` | Per-engine cooldown after CAPTCHA/429/access-denied responses; set `0` to disable | 1800000 |
 | `CRAWL4AI_URL` | Crawl4AI service URL | http://localhost:8001 |
 | `CRAWL4AI_SCRAPE_TIMEOUT_MS` | Default timeout for a single Crawl4AI scrape | 10000 |
