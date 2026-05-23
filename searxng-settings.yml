@@ -5,7 +5,7 @@ use_default_settings:
       - google
       - bing
       - yahoo
-      - startpage
+      # - startpage
       # - qwant
       # - mojeek
       # - duckduckgo
@@ -84,12 +84,12 @@ engines:
     headers:
       User-Agent: Wget/1.25.0
 
-  - name: startpage
-    engine: startpage
-    shortcut: sp
-    timeout: 8.0
-    weight: 1.0
-    disabled: false
+  # - name: startpage
+  #   engine: startpage
+  #   shortcut: sp
+  #   timeout: 8.0
+  #   weight: 1.0
+  #   disabled: false
 
   # - name: qwant
   #   engine: qwant
