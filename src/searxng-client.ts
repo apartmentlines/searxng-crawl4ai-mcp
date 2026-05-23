@@ -136,7 +136,7 @@ export class SearXNGClient {
             engine,
             query,
             reason: failureReason,
-            resultCount: result.results?.length || result.number_of_results || 0,
+            resultCount: this.countReturnedResults(result),
           });
           failedEngines.push({ engine, reason: failureReason });
           logger.warn(`SearXNG engine ${engine} failed for "${query}": ${failureReason}`);
@@ -158,7 +158,7 @@ export class SearXNGClient {
           eventType: 'engine_succeeded',
           engine,
           query,
-          resultCount: result.results?.length || result.number_of_results || 0,
+          resultCount: this.countReturnedResults(result),
         });
         logger.info(`SearXNG engine ${engine} succeeded for "${query}"`);
         return {
@@ -299,6 +299,10 @@ export class SearXNGClient {
     }
 
     return null;
+  }
+
+  private countReturnedResults(result: SearXNGSearchResponse): number {
+    return Array.isArray(result.results) ? result.results.length : 0;
   }
 
   private createFailedSearchResponse(

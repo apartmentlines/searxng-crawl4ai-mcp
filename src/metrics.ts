@@ -60,6 +60,7 @@ interface SearxngEngineRow {
   engine: string;
   attempts: number;
   successes: number;
+  returned_results: number;
 }
 
 interface Crawl4AIRow {
@@ -254,6 +255,9 @@ export class MetricsService implements MetricsRecorder {
         attempted_searches: row.attempts,
         successful_searches: row.successes,
         success_percentage: percentage(row.successes, row.attempts),
+        average_result_records_per_successful_search: row.successes > 0
+          ? round(row.returned_results / row.successes)
+          : 0,
       })),
     };
   }
@@ -277,7 +281,8 @@ export class MetricsService implements MetricsRecorder {
       SELECT
         engine,
         SUM(CASE WHEN event_type = 'engine_attempted' THEN 1 ELSE 0 END) AS attempts,
-        SUM(CASE WHEN event_type = 'engine_succeeded' THEN 1 ELSE 0 END) AS successes
+        SUM(CASE WHEN event_type = 'engine_succeeded' THEN 1 ELSE 0 END) AS successes,
+        COALESCE(SUM(CASE WHEN event_type = 'engine_succeeded' THEN result_count ELSE 0 END), 0) AS returned_results
       FROM searxng_events
       WHERE run_id IN (${placeholders(runIds)})
         AND event_type IN ('engine_attempted', 'engine_succeeded')
