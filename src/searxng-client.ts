@@ -2,6 +2,9 @@ import axios, { type AxiosError, type AxiosResponse } from 'axios';
 import { logger } from './logger.js';
 import type { MetricsRecorder } from './metrics.js';
 
+const SEARCH_INTERVAL_MIN_MS = 5000;
+const SEARCH_INTERVAL_MAX_MS = 10000;
+
 export interface SearchResult {
   title: string;
   url: string;
@@ -69,13 +72,13 @@ export class SearXNGClient {
   constructor(baseUrl: string = 'http://localhost:8080', metrics?: MetricsRecorder) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
     this.metrics = metrics;
-    this.searchIntervalMinMs = this.parseNonNegativeIntegerEnv('SEARXNG_SEARCH_INTERVAL_MIN_MS', 3000);
-    this.searchIntervalMaxMs = this.parseNonNegativeIntegerEnv('SEARXNG_SEARCH_INTERVAL_MAX_MS', 5000);
+    this.searchIntervalMinMs = this.parseNonNegativeIntegerEnv('SEARXNG_SEARCH_INTERVAL_MIN_MS', SEARCH_INTERVAL_MIN_MS);
+    this.searchIntervalMaxMs = this.parseNonNegativeIntegerEnv('SEARXNG_SEARCH_INTERVAL_MAX_MS', SEARCH_INTERVAL_MAX_MS);
     this.engineCooldownMs = Number.parseInt(process.env.SEARXNG_ENGINE_COOLDOWN_MS || '1800000', 10);
 
     if (this.searchIntervalMinMs > this.searchIntervalMaxMs) {
-      this.searchIntervalMinMs = 3000;
-      this.searchIntervalMaxMs = 5000;
+      this.searchIntervalMinMs = SEARCH_INTERVAL_MIN_MS;
+      this.searchIntervalMaxMs = SEARCH_INTERVAL_MAX_MS;
     }
 
     if (!Number.isFinite(this.engineCooldownMs) || this.engineCooldownMs < 0) {
