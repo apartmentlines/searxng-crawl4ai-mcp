@@ -1,5 +1,6 @@
 import axios, { AxiosError, type AxiosResponse } from 'axios';
 import { logger } from './logger.js';
+import type { MetricsRecorder } from './metrics.js';
 
 const DEFAULT_SCRAPE_TIMEOUT_MS = 10000;
 const DEFAULT_BATCH_TIMEOUT_MS = 45000;
@@ -49,12 +50,19 @@ export interface BatchScrapeResponse {
 
 export class Crawl4AIClient {
   private baseUrl: string;
+  private metrics?: MetricsRecorder;
 
-  constructor(baseUrl: string = 'http://localhost:8000') {
+  constructor(baseUrl: string = 'http://localhost:8000', metrics?: MetricsRecorder) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
+    this.metrics = metrics;
   }
 
   async scrape(url: string, options: ScrapeOptions = {}): Promise<Crawl4AIResponse> {
+    this.recordMetric({
+      eventType: 'scrape_attempted',
+      url,
+    });
+
     try {
       logger.info(`Scraping with Crawl4AI: ${url}`);
       
@@ -79,10 +87,22 @@ export class Crawl4AIClient {
       
       if (!result.success) {
         logger.warn(`Crawl4AI scrape failed for ${url}: ${result.error || 'Unknown error'}`);
+        this.recordMetric({
+          eventType: 'scrape_failed',
+          url,
+          statusCode: result.status,
+          error: result.error || 'Unknown error',
+        });
         return result;
       }
       
       logger.info(`Successfully scraped ${url} (${result.data?.metadata?.word_count || 0} words)`);
+      this.recordMetric({
+        eventType: 'scrape_succeeded',
+        url: result.url || url,
+        statusCode: result.status,
+        returnedBytes: this.calculateReturnedBytes(result),
+      });
       return result;
       
     } catch (error) {
@@ -99,13 +119,31 @@ export class Crawl4AIClient {
         if (error.response?.status) {
           scrapeFailure.status = error.response.status;
         }
+        this.recordMetric({
+          eventType: 'scrape_failed',
+          url,
+          statusCode: scrapeFailure.status,
+          error: scrapeFailure.error,
+        });
         return scrapeFailure;
       }
+      this.recordMetric({
+        eventType: 'scrape_failed',
+        url,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       throw error;
     }
   }
 
   async batchScrape(urls: string[], options: BatchScrapeOptions = {}): Promise<BatchScrapeResponse> {
+    urls.forEach((url) => {
+      this.recordMetric({
+        eventType: 'scrape_attempted',
+        url,
+      });
+    });
+
     try {
       logger.info(`Batch scraping ${urls.length} URLs with Crawl4AI`);
       
@@ -129,11 +167,36 @@ export class Crawl4AIClient {
       
       const successful = result.results.filter(r => r.success).length;
       logger.info(`Batch scrape completed: ${successful}/${result.total} successful`);
+      result.results.forEach((scrapeResult) => {
+        if (scrapeResult.success) {
+          this.recordMetric({
+            eventType: 'scrape_succeeded',
+            url: scrapeResult.url,
+            statusCode: scrapeResult.status,
+            returnedBytes: this.calculateReturnedBytes(scrapeResult),
+          });
+          return;
+        }
+
+        this.recordMetric({
+          eventType: 'scrape_failed',
+          url: scrapeResult.url,
+          statusCode: scrapeResult.status,
+          error: scrapeResult.error || 'Unknown error',
+        });
+      });
       
       return result;
       
     } catch (error) {
       logger.error('Crawl4AI batch scrape error:', error);
+      urls.forEach((url) => {
+        this.recordMetric({
+          eventType: 'scrape_failed',
+          url,
+          error: error instanceof Error ? this.formatError(error) : 'Unknown error',
+        });
+      });
       if (error instanceof AxiosError) {
         throw new Error(this.formatAxiosError(error));
       }
@@ -233,5 +296,24 @@ export class Crawl4AIClient {
       }
     }
     return JSON.stringify(data);
+  }
+
+  private calculateReturnedBytes(result: Crawl4AIResponse): number {
+    return Buffer.byteLength(JSON.stringify(result.data ?? {}), 'utf8');
+  }
+
+  private formatError(error: Error): string {
+    if (error instanceof AxiosError) {
+      return this.formatAxiosError(error);
+    }
+    return error.message;
+  }
+
+  private recordMetric(event: Parameters<MetricsRecorder['recordCrawl4AIEvent']>[0]): void {
+    if (!this.metrics) {
+      return;
+    }
+
+    void this.metrics.recordCrawl4AIEvent(event);
   }
 }

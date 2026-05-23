@@ -15,6 +15,14 @@ services:
       - SEARXNG_SECRET=${SEARXNG_SECRET:-$(openssl rand -hex 32)}
     volumes:
       - ./searxng-settings.yml:/etc/searxng/settings.yml:ro
+      - ${MCP_METRICS_DATA_DIR:-./data}/container-runs:/mcp-run-state
+    post_start:
+      - command: >
+          /bin/sh -c 'run_id="$$(cat /proc/sys/kernel/random/uuid)";
+          started_at="$$(date -u +%Y-%m-%dT%H:%M:%SZ)";
+          tmp=/mcp-run-state/searxng.json.tmp;
+          printf "{\"service\":\"searxng\",\"run_id\":\"%s\",\"started_at\":\"%s\"}\n" "$$run_id" "$$started_at" > "$$tmp";
+          mv "$$tmp" /mcp-run-state/searxng.json'
     cap_drop:
       - ALL
     cap_add:
@@ -69,6 +77,14 @@ services:
         condition: service_healthy
     volumes:
       - ./logs:/app/logs
+      - ${MCP_METRICS_DATA_DIR:-./data}/container-runs:/mcp-run-state
+    post_start:
+      - command: >
+          /bin/sh -c 'run_id="$$(cat /proc/sys/kernel/random/uuid)";
+          started_at="$$(date -u +%Y-%m-%dT%H:%M:%SZ)";
+          tmp=/mcp-run-state/crawl4ai.json.tmp;
+          printf "{\"service\":\"crawl4ai\",\"run_id\":\"%s\",\"started_at\":\"%s\"}\n" "$$run_id" "$$started_at" > "$$tmp";
+          mv "$$tmp" /mcp-run-state/crawl4ai.json'
 
   # Our MCP Server (orchestrates SearXNG + Crawl4AI)
   # mcp-server:

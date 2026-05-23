@@ -1,5 +1,6 @@
 import axios, { type AxiosError, type AxiosResponse } from 'axios';
 import { logger } from './logger.js';
+import type { MetricsRecorder } from './metrics.js';
 
 export interface SearchResult {
   title: string;
@@ -56,6 +57,7 @@ export interface SearXNGSearchOptions {
 
 export class SearXNGClient {
   private baseUrl: string;
+  private metrics?: MetricsRecorder;
   private lastSearchAt = 0;
   private searchIntervalMinMs: number;
   private searchIntervalMaxMs: number;
@@ -64,8 +66,9 @@ export class SearXNGClient {
   private searchQueue: Promise<void> = Promise.resolve();
   private engineCursor = 0;
 
-  constructor(baseUrl: string = 'http://localhost:8080') {
+  constructor(baseUrl: string = 'http://localhost:8080', metrics?: MetricsRecorder) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
+    this.metrics = metrics;
     this.searchIntervalMinMs = this.parseNonNegativeIntegerEnv('SEARXNG_SEARCH_INTERVAL_MIN_MS', 3000);
     this.searchIntervalMaxMs = this.parseNonNegativeIntegerEnv('SEARXNG_SEARCH_INTERVAL_MAX_MS', 5000);
     this.engineCooldownMs = Number.parseInt(process.env.SEARXNG_ENGINE_COOLDOWN_MS || '1800000', 10);
@@ -101,6 +104,14 @@ export class SearXNGClient {
       const cooldownRemainingMs = this.getEngineCooldownRemainingMs(engine);
       if (cooldownRemainingMs > 0) {
         const reason = `Cooling down after CAPTCHA/rate-limit failure`;
+        const cooldownUntil = this.engineCooldownUntil.get(engine);
+        this.recordMetric({
+          eventType: 'engine_cooldown_skipped',
+          engine,
+          query,
+          reason,
+          cooldownUntil: cooldownUntil ? new Date(cooldownUntil) : undefined,
+        });
         failedEngines.push({ engine, reason, retry_after_ms: cooldownRemainingMs });
         logger.warn(`SearXNG engine ${engine} skipped for "${query}": ${reason} (${cooldownRemainingMs}ms remaining)`);
         await this.waitForSearchInterval();
@@ -108,6 +119,11 @@ export class SearXNGClient {
       }
 
       try {
+        this.recordMetric({
+          eventType: 'engine_attempted',
+          engine,
+          query,
+        });
         const result = await this.search(query, {
           ...options,
           engines: engine,
@@ -115,13 +131,35 @@ export class SearXNGClient {
         const failureReason = this.getSearchFailureReason(result, engine);
 
         if (failureReason) {
+          this.recordMetric({
+            eventType: 'engine_failed',
+            engine,
+            query,
+            reason: failureReason,
+            resultCount: result.results?.length || result.number_of_results || 0,
+          });
           failedEngines.push({ engine, reason: failureReason });
           logger.warn(`SearXNG engine ${engine} failed for "${query}": ${failureReason}`);
-          this.cooldownEngineIfNeeded(engine, failureReason);
+          const cooldownUntil = this.cooldownEngineIfNeeded(engine, failureReason);
+          if (cooldownUntil) {
+            this.recordMetric({
+              eventType: 'engine_cooldown_started',
+              engine,
+              query,
+              reason: failureReason,
+              cooldownUntil,
+            });
+          }
           continue;
         }
 
-        this.clearEngineCooldown(engine);
+        this.clearEngineCooldown(engine, query);
+        this.recordMetric({
+          eventType: 'engine_succeeded',
+          engine,
+          query,
+          resultCount: result.results?.length || result.number_of_results || 0,
+        });
         logger.info(`SearXNG engine ${engine} succeeded for "${query}"`);
         return {
           ...result,
@@ -135,9 +173,24 @@ export class SearXNGClient {
         }
 
         const reason = error instanceof Error ? error.message : 'Unknown error';
+        this.recordMetric({
+          eventType: 'engine_failed',
+          engine,
+          query,
+          reason,
+        });
         failedEngines.push({ engine, reason });
         logger.warn(`SearXNG engine ${engine} failed for "${query}": ${reason}`);
-        this.cooldownEngineIfNeeded(engine, reason);
+        const cooldownUntil = this.cooldownEngineIfNeeded(engine, reason);
+        if (cooldownUntil) {
+          this.recordMetric({
+            eventType: 'engine_cooldown_started',
+            engine,
+            query,
+            reason,
+            cooldownUntil,
+          });
+        }
       }
     }
 
@@ -282,17 +335,25 @@ export class SearXNGClient {
     return ['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ECONNRESET'].includes(axiosError.code || '');
   }
 
-  private cooldownEngineIfNeeded(engine: string, reason: string): void {
+  private cooldownEngineIfNeeded(engine: string, reason: string): Date | null {
     if (this.engineCooldownMs === 0 || !this.isCooldownFailureReason(reason)) {
-      return;
+      return null;
     }
 
     const cooldownUntil = Date.now() + this.engineCooldownMs;
     this.engineCooldownUntil.set(engine, cooldownUntil);
     logger.warn(`SearXNG engine ${engine} cooling down for ${this.engineCooldownMs}ms after: ${reason}`);
+    return new Date(cooldownUntil);
   }
 
-  private clearEngineCooldown(engine: string): void {
+  private clearEngineCooldown(engine: string, query?: string): void {
+    if (this.engineCooldownUntil.has(engine)) {
+      this.recordMetric({
+        eventType: 'engine_cooldown_cleared',
+        engine,
+        query,
+      });
+    }
     this.engineCooldownUntil.delete(engine);
   }
 
@@ -396,5 +457,13 @@ export class SearXNGClient {
     } catch (error) {
       return false;
     }
+  }
+
+  private recordMetric(event: Parameters<MetricsRecorder['recordSearxngEvent']>[0]): void {
+    if (!this.metrics) {
+      return;
+    }
+
+    void this.metrics.recordSearxngEvent(event);
   }
 }

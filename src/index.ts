@@ -11,12 +11,15 @@ import { createProxyAgent } from './proxy-agent.js';
 import { logger } from './logger.js';
 import { SearXNGClient } from './searxng-client.js';
 import { Crawl4AIClient } from './crawl4ai-client.js';
+import { MetricsService, NullMetricsRecorder } from './metrics.js';
+import type { MetricsRecorder } from './metrics.js';
 
 config({ quiet: true });
 
 const MAX_SEARCH_PAGE = 3;
 const DEFAULT_CRAWL4AI_SCRAPE_TIMEOUT_MS = 10000;
 const DEFAULT_CRAWL4AI_BATCH_TIMEOUT_MS = 45000;
+const DEFAULT_METRICS_PORT = 3003;
 
 function parsePositiveIntegerEnv(name: string, fallback: number): number {
   const rawValue = process.env[name];
@@ -28,6 +31,28 @@ function parsePositiveIntegerEnv(name: string, fallback: number): number {
   return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : fallback;
 }
 
+function parseBooleanEnv(name: string, fallback: boolean): boolean {
+  const rawValue = process.env[name];
+  if (!rawValue) {
+    return fallback;
+  }
+
+  return !['0', 'false', 'no', 'off'].includes(rawValue.toLowerCase());
+}
+
+function createMetricsService(): MetricsService | null {
+  if (!parseBooleanEnv('MCP_METRICS_ENABLED', true)) {
+    return null;
+  }
+
+  try {
+    return new MetricsService();
+  } catch (error) {
+    logger.warn('MCP metrics disabled after initialization failure: %s', error instanceof Error ? error.message : String(error));
+    return null;
+  }
+}
+
 export class FirecrawlMCPServer {
   private server: Server;
   private firecrawl: FirecrawlApp;
@@ -37,6 +62,9 @@ export class FirecrawlMCPServer {
   private firecrawlEnabled: boolean;
   private crawl4aiScrapeTimeoutMs: number;
   private crawl4aiBatchTimeoutMs: number;
+  private metrics: MetricsRecorder;
+  private metricsService: MetricsService | null;
+  private metricsPort: number;
 
   constructor() {
     this.server = new Server(
@@ -52,6 +80,9 @@ export class FirecrawlMCPServer {
     );
 
     this.firecrawlEnabled = process.env.ENABLE_FIRECRAWL !== 'false';
+    this.metricsService = createMetricsService();
+    this.metrics = this.metricsService ?? new NullMetricsRecorder();
+    this.metricsPort = parsePositiveIntegerEnv('MCP_METRICS_PORT', DEFAULT_METRICS_PORT);
     this.crawl4aiScrapeTimeoutMs = parsePositiveIntegerEnv(
       'CRAWL4AI_SCRAPE_TIMEOUT_MS',
       DEFAULT_CRAWL4AI_SCRAPE_TIMEOUT_MS
@@ -72,10 +103,10 @@ export class FirecrawlMCPServer {
     });
 
     // Initialize SearXNG client
-    this.searxng = new SearXNGClient(process.env.SEARXNG_URL || 'http://localhost:8081');
+    this.searxng = new SearXNGClient(process.env.SEARXNG_URL || 'http://localhost:8081', this.metrics);
     
     // Initialize Crawl4AI client
-    this.crawl4ai = new Crawl4AIClient(process.env.CRAWL4AI_URL || 'http://localhost:8001');
+    this.crawl4ai = new Crawl4AIClient(process.env.CRAWL4AI_URL || 'http://localhost:8001', this.metrics);
 
     this.setupToolHandlers();
   }
@@ -771,6 +802,10 @@ export class FirecrawlMCPServer {
   }
 
   async run() {
+    if (this.metricsService) {
+      this.metricsService.startHttpServer(this.metricsPort, () => this.searxng.getActiveEngines());
+    }
+
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     logger.info('SearXNG + Crawl4AI MCP Server started with proxy support');
