@@ -4,9 +4,10 @@ use_default_settings:
     keep_only:
       - google
       - bing
+      - yahoo
       # - qwant
       # - mojeek
-      - duckduckgo
+      # - duckduckgo
       # - brave
       # - startpage
 
@@ -73,31 +74,41 @@ engines:
     weight: 1.0
     disabled: false
 
+  - name: yahoo
+    engine: yahoo
+    shortcut: yh
+    weight: 1.0
+    timeout: 8.0
+    disabled: false
+    enable_http2: false
+    headers:
+      User-Agent: Wget/1.25.0
+
   # - name: qwant
   #   engine: qwant
   #   shortcut: qw
   #   categories: general
   #   timeout: 6.0
   #   disabled: true
-  #
+
   # - name: mojeek
   #   engine: mojeek
   #   shortcut: mjk
   #   timeout: 6.0
   #   disabled: true
 
-  - name: duckduckgo
-    engine: duckduckgo
-    shortcut: ddg
-    timeout: 6.0
-    disabled: false
+  # - name: duckduckgo
+  #   engine: duckduckgo
+  #   shortcut: ddg
+  #   timeout: 6.0
+  #   disabled: false
 
   # - name: brave
   #   engine: brave
   #   shortcut: br
   #   timeout: 6.0
   #   disabled: true
-  #
+
   # - name: startpage
   #   engine: startpage
   #   shortcut: sp
