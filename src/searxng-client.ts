@@ -65,11 +65,11 @@ export class SearXNGClient {
 
   constructor(baseUrl: string = 'http://localhost:8080') {
     this.baseUrl = baseUrl.replace(/\/$/, '');
-    this.minSearchIntervalMs = Number.parseInt(process.env.SEARXNG_MIN_SEARCH_INTERVAL_MS || '1000', 10);
+    this.minSearchIntervalMs = Number.parseInt(process.env.SEARXNG_MIN_SEARCH_INTERVAL_MS || '2000', 10);
     this.engineCooldownMs = Number.parseInt(process.env.SEARXNG_ENGINE_COOLDOWN_MS || '1800000', 10);
 
     if (!Number.isFinite(this.minSearchIntervalMs) || this.minSearchIntervalMs < 0) {
-      this.minSearchIntervalMs = 1000;
+      this.minSearchIntervalMs = 2000;
     }
 
     if (!Number.isFinite(this.engineCooldownMs) || this.engineCooldownMs < 0) {
