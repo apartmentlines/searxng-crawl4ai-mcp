@@ -100,6 +100,7 @@ export class SearXNGClient {
         const reason = `Cooling down after CAPTCHA/rate-limit failure`;
         failedEngines.push({ engine, reason, retry_after_ms: cooldownRemainingMs });
         logger.warn(`SearXNG engine ${engine} skipped for "${query}": ${reason} (${cooldownRemainingMs}ms remaining)`);
+        await this.waitForSearchInterval();
         continue;
       }
 
@@ -346,6 +347,10 @@ export class SearXNGClient {
     } finally {
       releaseSearch();
     }
+  }
+
+  private async waitForSearchInterval(): Promise<void> {
+    await this.runThrottledSearch(async () => undefined);
   }
 
   async getEngines(): Promise<any> {
