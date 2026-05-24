@@ -6,15 +6,17 @@ services:
     build:
       context: ./docker/searxng
       dockerfile: Dockerfile
-    image: searxng-crawl4ai/searxng:duckduckgo-parser-patch
+    image: searxng-crawl4ai/searxng:custom
     container_name: searxng
     ports:
       - "8081:8080"
     environment:
       - SEARXNG_BASE_URL=http://localhost:8081/
-      - SEARXNG_SECRET=${SEARXNG_SECRET:-$(openssl rand -hex 32)}
+      - SEARXNG_SECRET=${SEARXNG_SECRET}
+      - SEARXNG_PROXY_USER=${SEARXNG_PROXY_USER}
+      - SEARXNG_PROXY_PASSWORD_URLENCODED=${SEARXNG_PROXY_PASSWORD_URLENCODED}
     volumes:
-      - ./searxng-settings.yml:/etc/searxng/settings.yml:ro
+      - ./settings.yml.template:/etc/searxng/settings.yml.template:ro
       - ${MCP_METRICS_DATA_DIR:-./data}/container-runs:/mcp-run-state
     post_start:
       - command: >

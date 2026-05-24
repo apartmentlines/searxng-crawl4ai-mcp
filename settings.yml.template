@@ -3,8 +3,8 @@ use_default_settings:
   engines:
     keep_only:
       - google
-      - bing
-      - yahoo
+      # - bing
+      # - yahoo
       # - startpage
       # - qwant
       # - mojeek
@@ -30,7 +30,7 @@ search:
 server:
   port: 8080
   bind_address: "0.0.0.0"
-  secret_key: "CHANGE_ME_RUN_openssl_rand_-hex_32_AND_PASTE_HERE"
+  secret_key: "${SEARXNG_SECRET}"
   base_url: "http://localhost:8081/"
   image_proxy: true
   http_protocol_version: "1.1"
@@ -56,6 +56,10 @@ outgoing:
   pool_maxsize: 10
   enable_http2: true
   retries: 0
+  proxies:
+    all://:
+      - "http://${SEARXNG_PROXY_USER}:${SEARXNG_PROXY_PASSWORD_URLENCODED}@us.decodo.com:10000"
+  extra_proxy_timeout: 10
 
 engines:
   # Preferred general web engines for private use
@@ -67,22 +71,22 @@ engines:
     weight: 1.0
     disabled: false
 
-  - name: bing
-    engine: bing
-    shortcut: bi
-    timeout: 8.0
-    weight: 1.0
-    disabled: false
+  # - name: bing
+  #   engine: bing
+  #   shortcut: bi
+  #   timeout: 8.0
+  #   weight: 1.0
+  #   disabled: false
 
-  - name: yahoo
-    engine: yahoo
-    shortcut: yh
-    weight: 1.0
-    timeout: 8.0
-    disabled: false
-    enable_http2: false
-    headers:
-      User-Agent: Wget/1.25.0
+  # - name: yahoo
+  #   engine: yahoo
+  #   shortcut: yh
+  #   weight: 1.0
+  #   timeout: 8.0
+  #   disabled: false
+  #   enable_http2: false
+  #   headers:
+  #     User-Agent: Wget/1.25.0
 
   # - name: startpage
   #   engine: startpage
