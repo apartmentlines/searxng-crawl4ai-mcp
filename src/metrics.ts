@@ -1,9 +1,15 @@
 import crypto from 'crypto';
 import fs from 'fs';
+import http from 'http';
 import path from 'path';
 import Database from 'better-sqlite3';
 import express, { type Express, type Request, type Response } from 'express';
 import { logger } from './logger.js';
+
+const METRICS_HEALTH_PATH = '/health';
+const METRICS_SERVICE_ID = 'searxng-crawl4ai-mcp-metrics';
+const METRICS_HEALTH_VERSION = '1';
+const METRICS_PROBE_TIMEOUT_MS = 500;
 
 export type MetricsServiceName = 'searxng' | 'crawl4ai';
 
@@ -157,6 +163,14 @@ export class MetricsService implements MetricsRecorder {
   createApp(getSearxngEnabledEngines: () => Promise<string[]>): Express {
     const app = express();
 
+    app.get(METRICS_HEALTH_PATH, (_request: Request, response: Response) => {
+      response.json({
+        service: METRICS_SERVICE_ID,
+        status: 'ok',
+        version: METRICS_HEALTH_VERSION,
+      });
+    });
+
     app.get('/metrics', async (request: Request, response: Response) => {
       try {
         const scope = typeof request.query.scope === 'string' ? request.query.scope : 'current';
@@ -171,11 +185,34 @@ export class MetricsService implements MetricsRecorder {
     return app;
   }
 
-  startHttpServer(port: number, getSearxngEnabledEngines: () => Promise<string[]>): void {
+  async startHttpServer(port: number, getSearxngEnabledEngines: () => Promise<string[]>): Promise<void> {
+    const existingService = await probeMetricsService(port);
+    if (existingService === 'metrics') {
+      logger.info(`MCP metrics endpoint already listening on port ${port}`);
+      return;
+    }
+    if (existingService === 'other') {
+      throw metricsPortConflictError(port);
+    }
+
     const app = this.createApp(getSearxngEnabledEngines);
-    app.listen(port, () => {
+
+    try {
+      await listen(app, port);
       logger.info(`MCP metrics endpoint listening on port ${port}`);
-    });
+    } catch (error) {
+      if (!isAddressInUseError(error)) {
+        throw error;
+      }
+
+      const raceWinner = await probeMetricsService(port);
+      if (raceWinner === 'metrics') {
+        logger.info(`MCP metrics endpoint already listening on port ${port}`);
+        return;
+      }
+
+      throw metricsPortConflictError(port);
+    }
   }
 
   private async getMetricsReport(
@@ -477,6 +514,70 @@ function getMetricsDbPath(): string {
 
 function getRunStateDir(): string {
   return process.env.MCP_RUN_STATE_DIR || path.join(getMetricsDataDir(), 'container-runs');
+}
+
+type MetricsServiceProbeResult = 'metrics' | 'other' | 'unavailable';
+
+function probeMetricsService(port: number): Promise<MetricsServiceProbeResult> {
+  return new Promise((resolve) => {
+    const request = http.get(
+      {
+        host: '127.0.0.1',
+        port,
+        path: METRICS_HEALTH_PATH,
+        timeout: METRICS_PROBE_TIMEOUT_MS,
+      },
+      (response) => {
+        let body = '';
+        response.setEncoding('utf8');
+
+        response.on('data', (chunk: string) => {
+          body += chunk;
+        });
+
+        response.on('end', () => {
+          try {
+            const health = JSON.parse(body) as Record<string, unknown>;
+            resolve(health.service === METRICS_SERVICE_ID ? 'metrics' : 'other');
+          } catch {
+            resolve('other');
+          }
+        });
+      },
+    );
+
+    request.on('timeout', () => {
+      request.destroy();
+      resolve('unavailable');
+    });
+
+    request.on('error', (error: NodeJS.ErrnoException) => {
+      resolve(error.code === 'ECONNREFUSED' ? 'unavailable' : 'other');
+    });
+  });
+}
+
+function listen(app: Express, port: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const server = app.listen(port);
+
+    server.once('listening', () => {
+      server.off('error', reject);
+      resolve();
+    });
+    server.once('error', reject);
+  });
+}
+
+function isAddressInUseError(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'EADDRINUSE';
+}
+
+function metricsPortConflictError(port: number): Error {
+  return new Error(
+    `MCP metrics port ${port} is already in use by a non-MCP metrics service. ` +
+      'Set MCP_METRICS_PORT to another port or disable metrics with MCP_METRICS_ENABLED=false.',
+  );
 }
 
 function parseRunMarker(service: MetricsServiceName, marker: unknown): RunMarker {

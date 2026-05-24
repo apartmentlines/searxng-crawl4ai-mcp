@@ -820,7 +820,7 @@ export class FirecrawlMCPServer {
 
   async run() {
     if (this.metricsService) {
-      this.metricsService.startHttpServer(this.metricsPort, () => this.searxng.getActiveEngines());
+      await this.metricsService.startHttpServer(this.metricsPort, () => this.searxng.getActiveEngines());
     }
 
     const transport = new StdioServerTransport();
